@@ -2,6 +2,23 @@ use ::rand::Rng;
 use ::rand::thread_rng;
 use macroquad::prelude::*;
 
+// ==================== CONFIGURACIONES ====================
+const PROB_INFECCION_DIARIA_PRESA: f32 = 0.02; // probabilidad diaria de enfermar (presas)
+const PROB_RECUPERACION_DIARIA_PRESA: f32 = 0.30; // probabilidad diaria de recuperarse (presas)
+
+const MAX_DIAS_SIN_RECUPERAR_PRESA: u32 = 5; // si pasa esto, la presa muere
+
+const CONSUMO_DIARIO_DEPREDADOR: f32 = 2.5; // gasto diario de reservas del depredador
+const UMBRAL_OPTIMO_DEPREDADOR: f32 = 30.0; // depredador umbral óptimo de reservas
+const UMBRAL_MINIMO_DEPREDADOR: f32 = 12.0; // depredador umbral mínimo de reservas
+const UMBRAL_DEFICIENTE_DEPREDADOR: f32 = 3.0; // depredador umbral deficiente de reservas
+const MAX_DIAS_SIN_RECUPERAR_DEPREDADOR: u32 = 7;
+const DIAS_INMUNIDAD: u32 = 7; // número de días protegidos al inicio
+
+
+const TIEMPO_ESPERA_COMIDA:f32 = 1.0; // depredador tiempo de espera entre comidas
+
+
 // ==================== SEXO ====================
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Sexo {
@@ -14,6 +31,22 @@ impl Sexo {
         match self {
             Sexo::Macho => "Macho",
             Sexo::Hembra => "Hembra",
+        }
+    }
+}
+
+// ==================== ESTADO DE SALUD ====================
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum EstadoSalud {
+    Sano,
+    Enfermo,
+}
+
+impl EstadoSalud {
+    fn nombre(&self) -> &'static str {
+        match self {
+            EstadoSalud::Sano => "Sano",
+            EstadoSalud::Enfermo => "Enfermo",
         }
     }
 }
@@ -103,7 +136,10 @@ struct Presa {
     sexo: Sexo,
     cooldown: f32,
     edad: u32,
+    peso: f32,
     modo_reproduccion: bool,
+    salud: EstadoSalud,
+    dias_enfermo: u32,
 }
 
 impl Presa {
@@ -125,14 +161,15 @@ impl Presa {
             sexo,
             cooldown: 0.0,
             edad: 0,
+            peso: 0.0,
             modo_reproduccion: true,
+            salud: EstadoSalud::Sano,
+            dias_enfermo: 0,
         }
     }
 
     fn peso_actual(&self) -> f32 {
-        let (peso_max, tasa, despl) = self.especie.gompertz_params();
-        let edad_f = self.edad as f32;
-        peso_max * (-f32::exp(-tasa * (edad_f - despl))).exp()
+        self.peso
     }
 
     fn mover_hacia(&mut self, tx: f32, ty: f32) {
@@ -165,7 +202,11 @@ impl Organismo for Presa {
 
     fn dibujar(&self) {
         draw_circle(self.x, self.y, self.r(), self.especie.color());
-
+        //Dibujar borde rojo si está enfermo
+        if self.salud == EstadoSalud::Enfermo {
+            draw_circle_lines(self.x, self.y, self.r() + 2.0, 2.0, RED);
+        }
+        // Dibujar letra M o H para indicar el sexo
         let label = match self.sexo {
             Sexo::Macho => "M",
             Sexo::Hembra => "H",
@@ -188,8 +229,10 @@ struct Depredador {
     vx: f32,
     vy: f32,
     vivo: bool,
-    peso: f32,
+    reserva: f32,
     cooldown: f32,
+    salud: EstadoSalud,
+    dias_enfermo: u32,
 }
 
 impl Depredador {
@@ -201,8 +244,10 @@ impl Depredador {
             vx: rng.gen_range(-3.0..3.0),
             vy: rng.gen_range(-3.0..3.0),
             vivo: true,
-            peso: 0.0,
+            reserva: 0.0,
             cooldown: 0.0,
+            salud: EstadoSalud::Sano,
+            dias_enfermo: 0,
         }
     }
 
@@ -239,6 +284,9 @@ impl Organismo for Depredador {
 
     fn dibujar(&self) {
         draw_circle(self.x, self.y, self.r(), RED);
+        if self.salud == EstadoSalud::Enfermo {
+            draw_circle_lines(self.x, self.y, self.r() + 2.0, 2.0, BLACK);
+        }
         if self.cooldown > 0.0 {
             draw_text(
                 &format!("{:.1}", self.cooldown),
@@ -264,6 +312,32 @@ fn colision(a: &dyn Organismo, b: &dyn Organismo) -> bool {
     let dy = a.y() - b.y();
     (dx * dx + dy * dy).sqrt() < a.r() + b.r()
 }
+
+// ==================== REPORTE DIARIO ====================
+#[derive(Clone, Debug, serde::Serialize)]
+struct DailyReport {
+    dia: u32,
+    conteo_conejos: usize,
+    conteo_ratones: usize,
+    conteo_ardillas: usize,
+    conteo_total: usize,
+    muertes_por_predacion: u32,
+    muertes_por_enfermedad: u32,
+    nuevos_infectados: u32,
+    recuperaciones: u32,
+    depredadores_enfermos: usize,
+    depredadores_vivos: usize,
+}
+
+fn guardar_reportes_csv(reportes: &Vec<DailyReport>, ruta: &str) -> csv::Result<()> {
+    let mut wtr = csv::Writer::from_path(ruta)?;
+    for rep in reportes {
+        wtr.serialize(rep)?; // convierte struct -> fila CSV
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
 
 // ==================== MAIN ====================
 #[macroquad::main("Presa-Depredador")]
@@ -292,6 +366,14 @@ async fn main() {
     let mut dias: u32 = 0;
     let mut tiempo_acumulado: f32 = 0.0;
 
+    // Contadores diarios (se reinician cada día)
+    let mut muertes_por_predacion_diarias: u32 = 0;
+    let mut muertes_por_enfermedad_diarias: u32 = 0;
+    let mut nuevos_infectados_diarios: u32 = 0;
+    let mut recuperaciones_diarias: u32 = 0;
+
+    let mut reportes: Vec<DailyReport> = Vec::new();
+
     loop {
         clear_background(LIGHTGRAY);
 
@@ -299,11 +381,134 @@ async fn main() {
         if tiempo_acumulado >= 1.0 {
             dias += 1;
             tiempo_acumulado = 0.0;
+
+                        // resetear contadores diarios
+            muertes_por_predacion_diarias = 0;
+            muertes_por_enfermedad_diarias = 0;
+            nuevos_infectados_diarios = 0;
+            recuperaciones_diarias = 0;
+            // --- procesos diarios relacionados con presas ---
             for p in presas.iter_mut() {
                 p.edad += 1;
+                    // Fórmula Gompertz para actualizar peso
+                let (a, b, c) = p.especie.gompertz_params();
+                p.peso = a * (-b * f32::exp(-c * p.edad as f32)).exp();
             }
-        }
 
+
+            // --- procesos diarios relacionados con enfermedades en presas ---
+            for p in presas.iter_mut() {
+                if !p.esta_vivo() { continue; }
+                match p.salud {
+                    EstadoSalud::Sano => {
+                        // posibilidad diaria de enfermar
+                        if rng.gen_range(0.0..1.0) < PROB_INFECCION_DIARIA_PRESA {
+                            p.salud = EstadoSalud::Enfermo;
+                            p.dias_enfermo = 0;
+                            nuevos_infectados_diarios += 1;
+                        }
+                    }
+                    EstadoSalud::Enfermo => {
+                        p.dias_enfermo += 1;
+                        // posibilidad de recuperación diaria
+                        if rng.gen_range(0.0..1.0) < PROB_RECUPERACION_DIARIA_PRESA {
+                            p.salud = EstadoSalud::Sano;
+                            p.dias_enfermo = 0;
+                            recuperaciones_diarias += 1;
+                        } else if p.dias_enfermo >= MAX_DIAS_SIN_RECUPERAR_PRESA {
+                            // muere por enfermedad
+                            p.matar();
+                            muertes_por_enfermedad_diarias += 1;
+                        }
+                    }
+                }
+            }
+
+            // --- procesos diarios relacionados con depredadores: consumo de reservas y consecuencias ---
+            for d in depredadores.iter_mut() {
+                if !d.esta_vivo() { continue; }
+                // consumir reservas por metabolismo
+                if d.reserva >= CONSUMO_DIARIO_DEPREDADOR {
+                    d.reserva -= CONSUMO_DIARIO_DEPREDADOR;
+                } else {
+                    // si no tiene suficiente, se queda en 0
+                    d.reserva = (d.reserva - CONSUMO_DIARIO_DEPREDADOR).max(0.0);
+                }
+                    // 🔹 aplicar inmunidad en los primeros días
+                if dias <= DIAS_INMUNIDAD {
+                    // durante los días de inmunidad no se enferma
+                    d.salud = EstadoSalud::Sano;
+                    d.dias_enfermo = 0;
+                    continue; // saltar al siguiente depredador
+                }
+
+                // evaluar estado según umbrales
+                if d.reserva >= UMBRAL_OPTIMO_DEPREDADOR {
+                    // óptimo: recupera si estaba enfermo
+                    if d.salud == EstadoSalud::Enfermo {
+                        d.salud = EstadoSalud::Sano;
+                        d.dias_enfermo = 0;
+                    } else {
+                        d.dias_enfermo = 0;
+                    }
+                } else if d.reserva >= UMBRAL_MINIMO_DEPREDADOR {
+                    // mínimo: se mantiene sano, pero no recupera enfermos (por regla dada)
+                    d.dias_enfermo = 0;
+                    d.salud = EstadoSalud::Sano;
+                } else if d.reserva >= UMBRAL_DEFICIENTE_DEPREDADOR {
+                    // entre deficiente y mínimo: riesgo; acumula días en estado precario
+                    d.dias_enfermo += 1;
+                    // no se declara enfermo inmediatamente, pero si se prolonga, pasa a enfermo
+                    if d.dias_enfermo > 2 {
+                        d.salud = EstadoSalud::Enfermo;
+                    }
+                    if d.dias_enfermo >= MAX_DIAS_SIN_RECUPERAR_DEPREDADOR {
+                        d.matar();
+                    }
+                } else {
+                    // por debajo de deficiente: se enferma y puede morir si se prolonga
+                    d.salud = EstadoSalud::Enfermo;
+                    d.dias_enfermo += 1;
+                    if d.dias_enfermo >= MAX_DIAS_SIN_RECUPERAR_DEPREDADOR {
+                        d.matar();
+                    }
+                }
+            }
+
+            // --- compilar y guardar reporte del día anterior (conteos actuales)
+            let mut conteo = [0usize, 0usize, 0usize];
+            let mut dep_enfermos = 0usize;
+            for p in &presas {
+                if p.esta_vivo() {
+                    match p.especie {
+                        Especie::Conejo => conteo[0] += 1,
+                        Especie::Raton => conteo[1] += 1,
+                        Especie::Ardilla => conteo[2] += 1,
+                    }
+                }
+            }
+            for d in &depredadores {
+                if d.esta_vivo() && d.salud == EstadoSalud::Enfermo {
+                    dep_enfermos += 1;
+                }
+            }
+
+            reportes.push(DailyReport {
+                dia: dias,
+                conteo_conejos: conteo[0],
+                conteo_ratones: conteo[1],
+                conteo_ardillas: conteo[2],
+                conteo_total: conteo.iter().sum(),
+                muertes_por_predacion: muertes_por_predacion_diarias,
+                muertes_por_enfermedad: muertes_por_enfermedad_diarias,
+                nuevos_infectados: nuevos_infectados_diarios,
+                recuperaciones: recuperaciones_diarias,
+                depredadores_enfermos: dep_enfermos,
+                depredadores_vivos: depredadores.iter().filter(|d| d.esta_vivo()).count(),
+
+            });
+
+        }
         // ==================== Movimiento inteligente y modo cuando se alcanza máxima población ====================
         for especie in &especies {
             let count = presas.iter().filter(|p| p.especie == *especie).count();
@@ -390,6 +595,7 @@ async fn main() {
                                     presas[i].y(),
                                     presas[i].especie(),
                                 ));
+                                recuperaciones_diarias += 1;
                             }
                             presas[i].cooldown = 2.0;
                             presas[j].cooldown = 2.0;
@@ -405,9 +611,10 @@ async fn main() {
             if d.cooldown <= 0.0 {
                 for p in presas.iter_mut() {
                     if p.esta_vivo() && p.edad >= p.especie.edad_sacrificio() && colision(d, p) {
-                        d.peso += p.peso_actual();
+                        d.reserva += p.peso_actual();
                         p.matar();
-                        d.cooldown = 3.0; // tiempo de espera entre comidas
+                        muertes_por_predacion_diarias += 1;
+                        d.cooldown = TIEMPO_ESPERA_COMIDA; // tiempo de espera entre comidas
                         break;
                     }
                 }
@@ -419,38 +626,54 @@ async fn main() {
         // Interfaz
         let mut conteo = [0, 0, 0];
         let mut suma_edades = [0u32, 0, 0];
+        let mut suma_pesos = [0.0f32, 0.0, 0.0];
 
         for p in &presas {
             match p.especie {
-                Especie::Conejo => { conteo[0] += 1; suma_edades[0] += p.edad; }
-                Especie::Raton => { conteo[1] += 1; suma_edades[1] += p.edad; }
-                Especie::Ardilla => { conteo[2] += 1; suma_edades[2] += p.edad; }
+                Especie::Conejo => { conteo[0] += 1; suma_edades[0] += p.edad; suma_pesos[0] += p.peso; }
+                Especie::Raton => { conteo[1] += 1; suma_edades[1] += p.edad; suma_pesos[1] += p.peso; }
+                Especie::Ardilla => { conteo[2] += 1; suma_edades[2] += p.edad; suma_pesos[2] += p.peso;}
             }
         }
+
+
 
         let promedio = |suma: u32, count: i32| -> f32 {
             if count > 0 { suma as f32 / count as f32 } else { 0.0 }
         };
 
-        draw_text(&format!("Día: {}", dias), 10.0, 20.0, 20.0, BLACK);
+        let promedio_peso = |suma: f32, count: i32| -> f32 {
+            if count > 0 { suma / count as f32 } else { 0.0 }
+        };
+
+        draw_text(&format!("Día: {} | Esc:para finalizar y generar reporte", dias), 10.0, 20.0, 20.0, BLACK);
         draw_text(
-            &format!("Conejos: {} (edad promedio: {:.1})", conteo[0], promedio(suma_edades[0], conteo[0])),
+            &format!("Conejos: {} (edad promedio: {:.1}, peso promedio: {:.1})", conteo[0], promedio(suma_edades[0], conteo[0]),promedio_peso(suma_pesos[0], conteo[0])),
             10.0, 50.0, 20.0, Especie::Conejo.color(),
         );
         draw_text(
-            &format!("Ratones: {} (edad promedio: {:.1})", conteo[1], promedio(suma_edades[1], conteo[1])),
+            &format!("Ratones: {} (edad promedio: {:.1}, peso promedio: {:.1})", conteo[1], promedio(suma_edades[1], conteo[1]),promedio_peso(suma_pesos[1], conteo[1])),
             10.0, 70.0, 20.0, Especie::Raton.color(),
         );
         draw_text(
-            &format!("Ardillas: {} (edad promedio: {:.1})", conteo[2], promedio(suma_edades[2], conteo[2])),
+            &format!("Ardillas: {} (edad promedio: {:.1}, peso promedio: {:.1})", conteo[2], promedio(suma_edades[2], conteo[2]),promedio_peso(suma_pesos[2], conteo[2])),
             10.0, 90.0, 20.0, Especie::Ardilla.color(),
         );
 
         for (i, d) in depredadores.iter().enumerate() {
             draw_text(
-                &format!("Depredador {} peso: {:.1}", i + 1, d.peso),
+                &format!("Depredador {} peso: {:.1} estado: {}", i + 1, d.reserva, d.salud.nombre()),
                 10.0, 130.0 + i as f32 * 20.0, 20.0, RED,
             );
+        }
+
+        if is_key_pressed(KeyCode::Escape) {
+            if let Err(e) = guardar_reportes_csv(&reportes, "reportes.csv") {
+                eprintln!("Error guardando CSV: {}", e);
+            } else {
+                println!("Reportes guardados en reportes.csv");
+            }
+            break; 
         }
 
         next_frame().await;
