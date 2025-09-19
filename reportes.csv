@@ -1,0 +1,10 @@
+dia,conteo_conejos,conteo_ratones,conteo_ardillas,conteo_total,muertes_por_predacion,muertes_por_enfermedad,nuevos_infectados,recuperaciones,reproducciones,depredadores_enfermos,depredadores_vivos
+1,12,23,15,50,0,0,1,0,0,0,1
+2,12,23,15,50,0,0,2,0,0,0,1
+3,12,23,15,50,0,0,0,3,0,0,1
+4,12,22,15,49,0,0,1,0,0,0,1
+5,12,21,15,48,0,0,0,0,0,0,1
+6,12,20,15,47,0,0,0,0,0,0,1
+7,12,27,14,53,0,0,1,0,6,0,1
+8,12,27,13,52,0,0,0,1,0,0,1
+9,11,29,15,55,0,0,0,0,3,0,1
