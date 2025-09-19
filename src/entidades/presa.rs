@@ -125,6 +125,7 @@ impl Presa {
 
 
 impl Organismo for Presa {
+    // Movimiento, cooldown y rebote en pantalla 
     fn actualizar(&mut self) {
         self.x += self.vx;
         self.y += self.vy;

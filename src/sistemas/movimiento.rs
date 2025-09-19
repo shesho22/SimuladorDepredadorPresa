@@ -3,6 +3,8 @@ use crate::entidades::organismo::Organismo;
 use crate::entidades::{Presa, Depredador};
 use crate::utilidades::configuraciones::*;
 
+
+// Busca pareja si esta en modo_reproduccuin o se mueve aleatoriamente
 pub fn movimiento_presas(presas: &mut Vec<Presa>, rng: &mut impl Rng) {
     for i in 0..presas.len() {
         let p = &presas[i];
@@ -55,6 +57,8 @@ pub fn mover_aleatoriamente(p: &mut Presa, rng: &mut impl Rng) {
     p.set_vy(vy);
 }
 
+
+// Busca presas que pasen la edad de sacrificio y la que sea mas pesada
 pub fn depredadores_buscar_presas(depredadores: &mut Vec<Depredador>, presas: &[Presa]) {
     for d in depredadores.iter_mut() {
         if let Some(obj) = presas.iter()

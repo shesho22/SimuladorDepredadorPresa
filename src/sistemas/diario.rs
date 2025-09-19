@@ -11,6 +11,8 @@ pub fn resetear_contadores_diarios(muertes_pred: &mut u32, muertes_enf: &mut u32
     *recuperaciones = 0;
 }
 
+
+//Incrementa edad, Actualiza peso y Activa modo reproduccion si llego a la edad
 pub fn actualizar_presas_diarias(presas: &mut Vec<Presa>) {
     for p in presas.iter_mut() {
         p.set_edad(p.edad() + 1);
@@ -22,7 +24,7 @@ pub fn actualizar_presas_diarias(presas: &mut Vec<Presa>) {
     }
 }
 
-
+//Puede enfermar, puede recuperar, si no se recupera muere
 pub fn procesar_enfermedad_presas(presas: &mut Vec<Presa>, rng: &mut impl Rng,
                                nuevos_infectados: &mut u32, recuperaciones: &mut u32,
                                muertes: &mut u32) {
@@ -51,6 +53,8 @@ pub fn procesar_enfermedad_presas(presas: &mut Vec<Presa>, rng: &mut impl Rng,
     }
 }
 
+//Consumo diario, Consume segun umbrales, si cubre el mas alto sana si esta enfermo y si pasa variso dias sin sanar muere
+//filtro inmunidad para evitar enfermar en los primeros dias
 pub fn procesar_dietas_depredadores(depredadores: &mut Vec<Depredador>, dias: u32) {
     for d in depredadores.iter_mut() {
         if !d.esta_vivo() { continue; }

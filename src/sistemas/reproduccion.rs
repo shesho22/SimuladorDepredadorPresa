@@ -22,6 +22,7 @@ pub fn reproduccion(presas: &mut Vec<Presa>, especies: &[Especie], reproduccione
             let especie = presas[i].especie();
             let count_actual = presas.iter().filter(|p| p.especie() == especie).count();
             let max_pobl = especie.poblacion_maxima();
+            // Posibles multiples crias
             let n_crias = Presa::num_crias(especie, &mut rng2);
             let espacio = max_pobl.saturating_sub(count_actual);
             let n_a_crear = n_crias.min(espacio);
