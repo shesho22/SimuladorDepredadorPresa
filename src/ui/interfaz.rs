@@ -1,5 +1,5 @@
 use macroquad::prelude::*;
-use crate::entidades::{Presa,Depredador,Especie,Organismo};
+use crate::entidades::{Presa,Depredador,Especie};
 use crate::utilidades::csv::{EstadisticasDiarias,guardar_reportes_csv};
 
 pub fn dibujar_ui(

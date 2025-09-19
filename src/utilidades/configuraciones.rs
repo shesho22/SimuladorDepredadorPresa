@@ -1,5 +1,8 @@
 // ==================== CONFIGURACIONES ====================
 
+// Dia 
+pub const DURACION_DIA: f32 = 1.0;
+
 // Presas
 pub const MAX_DIAS_SIN_RECUPERAR_PRESA: u32 = 5;
 
