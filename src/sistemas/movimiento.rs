@@ -34,15 +34,9 @@ pub fn movimiento_presas(presas: &mut Vec<Presa>, rng: &mut impl Rng) {
 
         if let Some(j) = pareja_index {
             let pareja = &presas[j];
-            let mut dx = pareja.x() - p.x() + rng.gen_range(-RADIO_PRESA..RADIO_PRESA);
-            let mut dy = pareja.y() - p.y() + rng.gen_range(-RADIO_PRESA..RADIO_PRESA);
-            let dist = (dx*dx + dy*dy).sqrt();
-            if dist > 0.0 {
-                presas[i].set_vx(dx / dist * VEL_MAX_PRESA);
-                presas[i].set_vy(dy / dist * VEL_MAX_PRESA);
-            } else {
-                mover_aleatoriamente(&mut presas[i], rng);
-            }
+            let tx = pareja.x() + rng.gen_range(-RADIO_PRESA..RADIO_PRESA);
+            let ty = pareja.y() + rng.gen_range(-RADIO_PRESA..RADIO_PRESA);
+            presas[i].mover_hacia(tx, ty);
         } else {
             mover_aleatoriamente(&mut presas[i], rng);
         }

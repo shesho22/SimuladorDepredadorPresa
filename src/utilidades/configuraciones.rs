@@ -4,6 +4,18 @@
 pub const DURACION_DIA: f32 = 1.0;
 
 // Presas
+pub const GOMPERTZ_A_CONEJO: f32 = 10.0;
+pub const GOMPERTZ_B_CONEJO: f32 = 0.2;
+pub const GOMPERTZ_C_CONEJO: f32 = 5.0;
+
+pub const GOMPERTZ_A_RATON: f32 = 4.0;
+pub const GOMPERTZ_B_RATON: f32 = 0.25;
+pub const GOMPERTZ_C_RATON: f32 = 4.0;
+
+pub const GOMPERTZ_A_ARDILLA: f32 = 7.0;
+pub const GOMPERTZ_B_ARDILLA: f32 = 0.18;
+pub const GOMPERTZ_C_ARDILLA: f32 = 6.0;
+
 pub const MAX_DIAS_SIN_RECUPERAR_PRESA: u32 = 5;
 
 pub const RADIO_PRESA: f32 = 8.0;
