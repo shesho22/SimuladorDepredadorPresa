@@ -9,63 +9,102 @@
 
 
 ```mermaid
-flowchart RL
+flowchart LR
     %% ==================== ENTIDADES EXTERNAS ====================
-    subgraph EX["Entidades Externas"]
-        Usuario["Usuario / Pantalla"]
-        RNG["Generador Aleatorio"]
-        Config["Constantes y Parámetros"]
-    end
+    EX1["Usuario / Pantalla"]
+    EX2["Generador Aleatorio (RNG)"]
+    EX3["Constantes y Parámetros"]
 
     %% ==================== ALMACENES DE DATOS ====================
-    subgraph DATA["Almacenes de Datos"]
-        Presas["Vector de Presas"]
-        Depredadores["Vector de Depredadores"]
-        Reportes["Reportes diarios"]
-    end
+    D1["Vector de Presas"]
+    D2["Vector de Depredadores"]
+    D3["Reportes diarios"]
 
-    %% ==================== PROCESOS PRINCIPALES ====================
-    subgraph PROC["Ciclo Principal Diario"]
-        P0["Paso 0: Inicializar simulador (RNG, presas, depredadores, contadores, reportes)"]
-        P1["Paso 1: Resetear contadores diarios"]
-        P2["Paso 2: Actualizar presas diarias"]
-        P3["Paso 3: Procesar enfermedad de presas"]
-        P4["Paso 4: Procesar dieta de depredadores"]
-        P5["Paso 5: Movimiento inteligente de presas y depredadores"]
-        P6["Paso 6: Reproducción de presas"]
-        P7["Paso 7: Depredadores comen"]
-        P8["Paso 8: Limpiar presas muertas"]
-        P9["Paso 9: Actualizar y dibujar UI"]
-    end
+    %% ==================== PROCESOS ====================
+    P0["0: Inicializar simulador"]
+    P1["1: Resetear contadores diarios"]
+    P2["2: Actualizar presas diarias"]
+    P2_1["2.1: Incrementar edad"]
+    P2_2["2.2: Actualizar peso"]
+    P2_3["2.3: Activar modo reproducción si cumple la edad"]
+
+    P3["3: Procesar enfermedad de presas"]
+    P3_1["3.1: Puede enfermar"]
+    P3_2["3.2: Puede recuperar"]
+    P3_3["3.3: Si no se recupera, muere"]
+
+    P4["4: Procesar dieta de depredadores"]
+    P4_1["4.1: Consumo diario"]
+    P4_2["4.2: Consume según umbrales"]
+    P4_3["4.3: Si cubre el más alto sana si está enfermo"]
+    P4_4["4.4: Si pasa varios días sin sanar, muere"]
+
+    P5["5: Movimiento y reproducción de presas"]
+    P5_1["5.1: Busca pareja si está en modo_reproducción"]
+    P5_2["5.2: Se mueve aleatoriamente si no"]
+
+    P6["6: Depredadores cazan y comen"]
+    P6_1["6.1: Buscar presas que pasen edad de sacrificio"]
+    P6_2["6.2: Seleccionar la más pesada"]
+    P6_3["6.3: Atacar y comer presa"]
+
+    P7["7: Limpiar presas muertas"]
+    P8["8: Actualizar y dibujar UI"]
 
     %% ==================== FLUJOS DE DATOS ====================
-    RNG --> P0
-    Config --> P0
-    P0 --> Presas
-    P0 --> Depredadores
-    P0 --> Reportes
+    %% Inicialización
+    EX2 --> P0
+    EX3 --> P0
+    P0 --> D1
+    P0 --> D2
+    P0 --> D3
 
-    Presas -->|Estado, posición, salud| P2
-    P2 --> Presas
-    Presas -->|Datos para infección| P3
-    RNG -->|Valores aleatorios| P3
-    P3 --> Presas
-    Depredadores --> P4
-    P4 --> Depredadores
-    P5 --> Presas
-    P5 --> Depredadores
-    RNG -->|Movimientos aleatorios| P5
-    P6 --> Presas
-    RNG -->|Decisiones probabilísticas| P6
-    Depredadores -->|Objetivos de depredación| P7
-    P7 --> Presas
-    P7 --> Depredadores
-    P1 -->|Reinicia contadores| P3
-    Presas -->|Datos para reportes| Reportes
-    Depredadores -->|Datos para reportes| Reportes
-    P9 --> Reportes
-    P9 --> Usuario
-    Config -->|Parámetros del sistema| P2
-    Config --> P4
-    Config --> P5
-    Config --> P6
+    %% Paso 2
+    D1 --> P2
+    P2 --> P2_1
+    P2_1 --> P2_2
+    P2_2 --> P2_3
+    P2_3 --> D1
+
+    %% Paso 3
+    D1 --> P3
+    EX2 --> P3
+    P3 --> P3_1
+    P3_1 --> P3_2
+    P3_2 --> P3_3
+    P3_3 --> D1
+
+    %% Paso 4
+    D2 --> P4
+    P4 --> P4_1
+    P4_1 --> P4_2
+    P4_2 --> P4_3
+    P4_3 --> P4_4
+    P4_4 --> D2
+
+    %% Paso 5
+    D1 --> P5
+    EX2 --> P5
+    P5 --> P5_1
+    P5 --> P5_2
+    P5_1 --> D1
+    P5_2 --> D1
+
+    %% Paso 6
+    D2 --> P6
+    D1 --> P6
+    P6 --> P6_1
+    P6_1 --> P6_2
+    P6_2 --> P6_3
+    P6_3 --> D2
+    P6_3 --> D1
+
+    %% Paso 7 y 8
+    P7 --> D1
+    D1 --> P8
+    D2 --> P8
+    P8 --> D3
+    P8 --> EX1
+
+    %% Reinicio de contadores diarios
+    P1 --> P3
