@@ -9,7 +9,7 @@
 
 
 ```mermaid
-flowchart LR
+flowchart TB
     %% ==================== ENTIDADES EXTERNAS ====================
     EX1["Usuario / Pantalla"]
     EX2["Generador Aleatorio (RNG)"]
